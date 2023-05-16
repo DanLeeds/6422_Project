@@ -1,0 +1,21 @@
+# Codebook for usa_data_no_outliers.csv
+
+This data frame contains filtered data from the 2022 Stack Overflow Developer Survey, focusing on data from respondents located in the USA. Only the variables necessary for the analysis have been included.
+
+Variables
+
+1. `Country`:
+   - Description: The country in which the respondent is located.
+   - Values: "United States".
+
+2. `ConvertedCompYearly`:
+   - Description: The respondent's yearly compensation in USD, converted from their original currency.
+
+3. `YearsCodePro`:
+   - Description: The number of years the respondent has coded professionally.
+
+4. `EdLevel`:
+   - Description: The highest level of formal education completed by the respondent.
+   - Values: Various levels of education (e.g., "Some college/university study without earning a degree", "Bachelor’s degree (B.A., B.S., B.Eng., etc.)", "Master’s degree (M.A., M.S., M.Eng., MBA, etc.)").
+
+Please note that this is a cleaned and filtered version of the original data. The original survey data contained more variables and respondents from various countries. This dataset has been filtered to include only respondents from the United States and only includes variables related to education, professional coding experience, and yearly compensation.
