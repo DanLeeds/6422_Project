@@ -1,0 +1,359 @@
+---
+title: 'The Income Equation: Unpacking the Roles of Experience and Education'
+author: 'Dan Leeds'
+date: "2023-05-16"
+output: html_document
+
+---
+
+
+
+
+## **Data Origins**
+
+The data for this project was obtained from the Stack Overflow Annual Developer Survey website (https://insights.stackoverflow.com/survey/), where I downloaded the full survey pack in .zip format for the year 2022. The stack overflow annual survey is a comprehensive questionnaire aimed at exploring various aspects of the global developer community. It gathers data on myriad topics such as programming languages, tools, practices, employment, education, and more. The data focused on for this project relates to income, education, and professional experience in coding.
+
+
+## **Research Questions**
+
+* Does the professional coding experience of individuals in the USA impact on their yearly income?
+
+* Is there an impact of education level on the income of professional coders in the USA?
+
+* Further :
+  + do individuals with greater experience report higher incomes across all educational backgrounds?
+  + do individuals with more formal education report higher incomes than people with an equal amount of experience but less formal education?
+
+
+## **Data Preparation**
+First, we need to install and load the necessary libraries and set our working directory using the 'here'. package.. 
+
+```{r setup, message=FALSE}
+
+
+# Load Libraries
+library(tidyverse)
+library(readr)
+library(here)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(ggridges)
+
+# Set Working Directory
+setwd(here())
+```
+
+
+
+Then, we load the survey data.
+```{r}
+# Load data 
+survey_data <- read.csv("raw/survey_results_public.csv")
+```
+
+
+```
+# Inspect the structure of the data
+str(survey_data)
+```
+
+We inspect variable and column names
+
+```
+# View variable and column names.
+
+head(survey_data)
+colnames(survey_data)
+```
+
+
+Next we convert the non-numeric values found in in our data set, and filter out NA values. 
+
+```{r}
+# Function to convert non-numeric values to numeric - for years of professional experience 'less than 1 year' and 'more than 50 years' need to be made into numeric values. 
+convert_years_code_pro <- function(x) {
+  if(x == "Less than 1 year") {
+    return(0.5) 
+  } else if(x == "More than 50 years") {
+    return(51) 
+  } else {
+    return(as.numeric(x))
+  }
+}
+```
+
+
+```{r}
+# Convert 'YearsCodePro' to numeric
+prepared_data <- survey_data %>%
+  filter(!is.na(YearsCodePro), 
+         !is.na(ConvertedCompYearly), 
+         !is.na(EdLevel), 
+         !is.na(Country)) %>%
+  mutate(YearsCodePro = sapply(YearsCodePro, convert_years_code_pro))
+```
+  
+  
+
+Given that income and educational attainments are significantly influenced by regional disparities in cost of living and the distinct educational systems of each nation, a decision was made at this stage to narrow the scope of this analysis to just one country. The United States of America was chosen as the focal point due to its comprehensive representation in the dataset. In order to isolate this data, a filter was applied to select only those respondents who identified their country as the United States, effectively excluding all other nations from the analysis.
+  
+    
+    
+```{r}
+# Filter to use USA only data
+usa_data <- prepared_data %>%
+  filter(Country == "United States of America")
+```
+  
+  
+
+In the examination of the income data, the presence of outliers was observed, representing values that deviated significantly from the median income. To address this issue, the interquartile range (IQR) was employed as a robust measure to identify and exclude these outliers. This process entails calculating the IQR, establishing the upper and lower boundaries, and finally applying these thresholds to filter out income values falling outside this range. This methodology ensures a more accurate representation of the central tendency of the income data by minimizing the skewness introduced by extreme values.
+
+  
+  
+```{r}
+# Calculate interquartile range
+
+Q1 <- quantile(usa_data$ConvertedCompYearly, 0.25)
+Q3 <- quantile(usa_data$ConvertedCompYearly, 0.75)
+IQR <- Q3 - Q1
+```
+
+
+
+```{r}
+upper_bound <- Q3 + 1.5 * IQR
+lower_bound <- Q1 - 1.5 * IQR
+```
+
+```{r}
+# Filter outliers
+usa_data_no_outliers <- usa_data %>%
+  filter(ConvertedCompYearly >= lower_bound, ConvertedCompYearly <= upper_bound)
+```
+  
+    
+    
+As the dataset encompasses numerous variables that do not pertain to the present analysis, a data refinement step is undertaken to streamline the analytical process. This entails a focused selection of only the relevant columns that are relevant to the analysis, while dispensing with extraneous variables.   
+  
+  
+
+```{r}
+# Select relevant columns
+usa_data_no_outliers <- select(usa_data_no_outliers, YearsCodePro, ConvertedCompYearly, EdLevel, Country)
+```
+
+```{r}
+# Remove all columns which will not be used in the analysis or visualisation
+usa_data_no_outliers <- select(usa_data_no_outliers, YearsCodePro, ConvertedCompYearly, EdLevel, Country)
+
+#Inspect new data frame
+head(usa_data_no_outliers)
+colnames(usa_data_no_outliers)
+```
+
+```{r}
+#Save the new data frame to the "processed" data folder
+write.csv(usa_data_no_outliers, "usa_data_no_outliers.csv", row.names = FALSE)
+```
+  
+  
+
+A number of variables in the dataset contain metadata that can be further refined. This refinement is carried out using the mutate function. Following this transformation, a validation step is undertaken to ascertain that the modifications have been implemented correctly.  
+  
+  
+
+```{r}
+usa_data_no_outliers <- usa_data_no_outliers %>%
+  mutate(EdLevel = recode(EdLevel, "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)" = "Secondary school",
+                          "Some college/university study without earning a degree" = "Some college"))
+
+unique(usa_data_no_outliers$EdLevel)
+```
+
+## **Visualising The Data** 
+
+### *Section 1 - Experience *   
+
+In this section we look at the data for experience and income, independent of education. 
+  
+    
+    
+
+```{r}
+ggplot(usa_data_no_outliers, aes(x = YearsCodePro, y = ConvertedCompYearly, color = YearsCodePro)) +
+  geom_point(alpha = 0.5,) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_color_gradient(low = "lightblue", high = "darkblue") +
+  labs(x = "Years of Professional Coding Experience", 
+       y = "Yearly Compensation (USD)",
+       color = "Years of Experience",
+       title = "Professional Coding Experience vs Yearly Compensation") +
+  theme_test()
+
+ggsave(filename = "Professional Coding Experience vs Yearly Compensation.png", width = 7, height = 6, dpi = 300)
+```
+The scatterplot above indicates towards some level of positive correlation between income and experience 
+
+  
+  
+
+
+```{r}
+ggplot(usa_data_no_outliers, aes(x = YearsCodePro, y = ConvertedCompYearly)) +
+  geom_hex(bins = 50) +
+  scale_fill_gradient(low = "red", high = "yellow") +
+  scale_y_continuous(labels = function(x) paste0(x / 1000, "k")) +
+  labs(x = "Years of Professional Coding Experience", 
+       y = "Yearly Compensation (USD)",
+       title = "2D Histogram of Professional Coding Experience vs Yearly Compensation") +
+  labs( color = "Years experience")+
+  theme_test()
+
+ggsave(filename = "2D Histogram of Professional Coding Experience vs Yearly Compensation.png", width = 8, height = 7, dpi = 300)
+
+
+```
+Here a two-dimensional histogram is employed to discern patterns within the dataset. This technique reveals correlations, concentrations, and outliers that might be concealed in other graph types. The color gradation in the histogram represents data density, illuminating areas of high or low concentration. The findings align with the prior plot: as coding experience increases, so does income. A distinct data cluster is observed in the 0 to 10 years range.
+  
+    
+    
+
+### *Section 2 - Education*
+In this section we look at the data for education and income, independent of experience.
+
+  
+  
+```{r}
+# Calculate average income for each education level
+average_income <- usa_data_no_outliers %>% 
+  group_by(EdLevel) %>% 
+  summarise(AverageIncome = mean(ConvertedCompYearly, na.rm = TRUE))
+
+# Create the lollipop chart
+ggplot(average_income, aes(x = reorder(EdLevel, -AverageIncome), y = AverageIncome)) +
+  geom_segment(aes(y = 0, 
+                   x = reorder(EdLevel, -AverageIncome), 
+                   yend = AverageIncome, 
+                   xend = reorder(EdLevel, -AverageIncome)), 
+               color = "blue", 
+               linewidth = 1.5) +
+  geom_point(color = "blue", size = 5) +
+  coord_flip() +
+  labs(x = "Education Level", 
+       y = "Average Yearly Compensation (USD)",
+       title = "Average Yearly Compensation by Education Level") +
+  theme_minimal()
+
+ggsave(filename = "Average Yearly Compensation by Education Level.jpg",width = 9, height = 7,dpi = 300)
+```
+  
+  
+
+Here, the impact of education level on yearly income is examined from a fresh perspective. By calculating the average income corresponding to each educational level, and subsequently visualizing this information through a lollipop chart, the interpretation becomes more straightforward. Interestingly, the chart does not depict a straightforward correlation between education level and income across all levels. 
+  
+  
+
+
+```{r,fig.height=6,fig.width=8}
+# Create the ridgeline plot
+
+ggplot(usa_data_no_outliers, aes(x = ConvertedCompYearly, y = EdLevel, fill = as.factor(EdLevel))) +
+  geom_density_ridges(alpha = 0.5) +
+  scale_fill_brewer(palette = "Spectral") +
+  scale_x_continuous(labels = scales::dollar) +
+  labs(x = "Yearly Compensation (USD)", 
+       y = "Education Level", 
+       title =  " Yearly Income by Education Level") +
+  theme_ridges() +
+  theme(legend.position = "none")
+  
+
+
+ggsave(filename = "Yearly Income by Education Level.jpg",width = 10, height = 7,dpi = 300)
+
+```
+
+  
+    
+Here, a ridgeline plot is utilized to exhibit a sequence of superimposed ridgelines, each representing the distribution of annual income corresponding to a distinct educational level. This method facilitates the comparison of income distributions amongst these categories. Despite the presence of some variations across educational strata, the visualization does not distinctly reveal a discernible pattern. Again, education does not appear to be responsible for income variation. 
+  
+    
+    
+### *Section 3 -  Experience, Education, and Income*
+in this section we look at all three variables together to see if any discernable interaction or pattern emerges.  
+  
+  
+
+
+```{r, fig.height=7,fig.width=11}
+#Create a facetwrap scatterplot with density 
+ggplot(usa_data_no_outliers, aes(x=YearsCodePro, y=ConvertedCompYearly/1000)) +
+  xlab("Years of Coding Experience") +
+  ylab("Annual Income (thousands of USD)") +
+  stat_density2d(aes(fill = after_stat(density)), geom = "tile", contour = FALSE) +
+  scale_fill_gradient(low = "white", high = "red", 
+                      breaks = seq(0, 1, by = 0.01), 
+                      labels = function(x) paste0(format(x*1000, nsmall = 0), "K")) +
+  geom_jitter(position=position_jitter(0.2), size=0.4) +
+  facet_wrap(~EdLevel) +
+  scale_y_continuous(labels = scales::comma) +
+  ggtitle("Density and Relationship between Experience and Income by Education Level") +
+  theme_test()
+
+
+ggsave(filename = "Yearly Income by Education Level.jpg",width = 9, height = 7,dpi = 300)
+
+```
+  
+  
+
+Here a facet wrap scatterplot with a density overlay is employed to depict the relationship between coding experience (in years) and annual income, segmented by education levels. Each facet represents a distinct education level for comparing income trends. A color gradient from white to red indicates data density, aiding trend identification. Random variation is introduced using a 'jitter' function to reduce overplotting and enhance data distribution visibility. The overall trend demonstrates a pattern of increasing income with growing experience within each educational category. This suggests that, notwithstanding the level of education, an increase in professional coding experience tends to correlate with an increase in yearly income.   
+  
+  
+
+
+
+```{r warning=FALSE, message=FALSE, fig.height=10,fig.width=12}
+# 3d scatterplot 
+
+fig <- plot_ly(usa_data_no_outliers, 
+               x = ~YearsCodePro, y = ~ConvertedCompYearly, z = ~EdLevel,
+               color = ~EdLevel, 
+               marker = list(symbol = 'circle', sizemode = 'diameter', size = 5),
+               text = ~paste('Years of Experience:', YearsCodePro, '<br>Yearly Compensation:', ConvertedCompYearly,
+                             '<br>Education Level:', EdLevel))
+
+# Add layout settings
+fig <- fig %>% layout(
+  title = 'Relationship between Coding Experience, Income, and Education Level',
+  scene = list(
+    xaxis = list(title = 'Years of Professional Coding Experience'),
+    yaxis = list(title = 'Yearly Compensation (USD)'),
+    zaxis = list(title = 'Education Level'),
+    lighting = list(ambient = 0.8)  # Adjust scene lighting
+  ),
+  paper_bgcolor = 'rgba(0,0,0,0)',  # Transparent background
+  plot_bgcolor = 'rgba(0,0,0,0)',   # Transparent plot background
+  hoverlabel = list(bgcolor = 'white', font = list(color = 'black'))  # Customize hover label appearance
+)
+
+fig
+```
+Here you see a plotly 3d scatterplot employed in order to examine how the data from each educational level fits into the overall picture when combined. Again, the overall trend shows a pattern of increasing income with growing experience within each educational category.
+
+## **Summary**
+
+The various data visualizations shown here suggest a consistent trend of increasing income with growing professional coding experience, regardless of, and across education levels. While there are observable variations in income across different levels of education, no definitive pattern emerges that links education level directly to income variation. Overall, the data suggests that professional experience in coding is a more significant determinant of income than education level. However,the plots also reveal a prominent data cluster within the early career stage, indicating that the majority of respondents fall within the 0 to 10 years of coding experience range. Therefore, it is possible that this may have impacted the accuracy of this analysis.  
+  
+    
+    
+
+
+
+
+
+
+
